@@ -4,6 +4,7 @@
   "type":"float",
   "min":0,
   "max":1,
-  "size":2
+  "size":2,
+  "noiseless":1
 }
 }

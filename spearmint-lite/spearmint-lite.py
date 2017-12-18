@@ -169,8 +169,16 @@ def main_controller(options, args):
         # Increment by the number of observed so we don't take the
         # same values twice
         off = pending.shape[0] + complete.shape[0]
+        if pending.shape[0] == 0 and complete.shape[0] == 0:
+            dedup_key = None
+        elif pending.shape[0] == 0:
+            dedup_key = complete
+        elif complete.shape[0] == 0:
+            dedup_key = pending
+        else:
+            dedup_key = np.vstack([pending, complete])
         candidates = gmap.hypercube_grid(options.grid_size,
-                                         options.grid_seed+off)
+                                         options.grid_seed+off, present=dedup_key)
 
         # Ask the chooser to actually pick one.
         # First mash the data into a format that matches that of the other

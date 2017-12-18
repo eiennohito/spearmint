@@ -1,21 +1,21 @@
 ##
 # Copyright (C) 2012 Jasper Snoek, Hugo Larochelle and Ryan P. Adams
-#                                                                                                                                                                                  
+#
 # This code is written for research and educational purposes only to
 # supplement the paper entitled "Practical Bayesian Optimization of
 # Machine Learning Algorithms" by Snoek, Larochelle and Adams Advances
 # in Neural Information Processing Systems, 2012
-#                                                                                                                                                                               
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-#                                                                                                                                                                             
+#
 # This program is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
-#                                                                                                                                                                        
+#
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see
 # <http://www.gnu.org/licenses/>.
@@ -122,9 +122,9 @@ class ExperimentGrid:
     def add_to_grid(self, candidate):
         # Set up the grid
         self.grid   = np.vstack((self.grid, candidate))
-        self.status = np.append(self.status, np.zeros(1, dtype=int) + 
+        self.status = np.append(self.status, np.zeros(1, dtype=int) +
                                 int(CANDIDATE_STATE))
-        
+
         self.values = np.append(self.values, np.zeros(1)+np.nan)
         self.durs   = np.append(self.durs, np.zeros(1)+np.nan)
         self.sgeids = np.append(self.sgeids, np.zeros(1,dtype=int))
@@ -172,22 +172,24 @@ class ExperimentGrid:
 
         # Write everything to a temporary file first.
         fh = tempfile.NamedTemporaryFile(mode='w', delete=False)
-        cPickle.dump({ 'vmap'   : self.vmap,
-                       'grid'   : self.grid,
-                       'status' : self.status,
-                       'values' : self.values,
-                       'durs'   : self.durs,
-                       'sgeids' : self.sgeids }, fh)
+        cPickle.dump({
+            'vmap': self.vmap,
+            'grid': self.grid,
+            'status': self.status,
+            'values': self.values,
+            'durs': self.durs,
+            'sgeids': self.sgeids
+        }, fh)
         fh.close()
 
         # Use an atomic move for better NFS happiness.
         cmd = 'mv "%s" "%s"' % (fh.name, self.jobs_pkl)
         os.system(cmd) # TODO: Should check system-dependent return status.
-    
+
     def _hypercube_grid(self, dims, size):
         # Generate from a sobol sequence
         sobol_grid = np.transpose(i4_sobol_generate(dims,size,self.seed))
-                
+
         return sobol_grid
 
 class Parameter:
@@ -203,7 +205,7 @@ class Parameter:
         self.str_val = []
 
 class GridMap:
-    
+
     def __init__(self, variables, grid_size):
         self.variables   = []
         self.cardinality = 0
@@ -235,15 +237,34 @@ class GridMap:
                 raise Exception("Unknown parameter type.")
         sys.stderr.write("Optimizing over %d dimensions\n" % (self.cardinality))
 
+    @staticmethod
+    def remove_dupes(data, rest):
+        d2 = set(tuple(row) for row in np.asarray(rest))
+        d1 = np.array([row for row in data if tuple(row) not in d2])        
+        return d1
+
     # Get a list of candidate experiments generated from a sobol sequence
-    def hypercube_grid(self, size, seed):
+    def hypercube_grid(self, size, seed, present=None):
         # Generate from a sobol sequence
         sobol_grid = np.transpose(i4_sobol_generate(self.cardinality,size,seed))
-                
+
+        if present is not None:
+            count = 0
+            while True:
+                sobol_grid = GridMap.remove_dupes(sobol_grid, present)
+                count += 1
+                non_dupes = sobol_grid.shape[0]
+                remaining = size - non_dupes
+                if remaining <= 0:
+                    return sobol_grid
+                grid2 = np.transpose(i4_sobol_generate(self.cardinality, size, seed + count * size))
+                grid2 = GridMap.remove_dupes(grid2, sobol_grid)
+                sobol_grid = np.vstack([sobol_grid, grid2])
+
         return sobol_grid
 
     # Convert a variable to the unit hypercube
-    # Takes a single variable encoded as a list, assuming the ordering is 
+    # Takes a single variable encoded as a list, assuming the ordering is
     # the same as specified in the configuration file
     def to_unit(self, v):
         unit = np.zeros(self.cardinality)
@@ -268,7 +289,7 @@ class GridMap:
 
             else:
                 raise Exception("Unknown parameter type.")
-            
+
         if (len(v) > 0):
             raise Exception("Too many variables passed to parser")
         return unit
@@ -287,7 +308,7 @@ class GridMap:
                 for v in p.str_val:
                     paramlist.append(v)
         return paramlist
-        
+
     def get_params(self, u):
         if u.shape[0] != self.cardinality:
             raise Exception("Hypercube dimensionality is incorrect.")
@@ -296,7 +317,7 @@ class GridMap:
         index  = 0
         for variable in self.variables:
             param = Parameter()
-            
+
             param.name = variable['name']
             if variable['type'] == 'int':
                 param.type = 'int'
@@ -322,11 +343,11 @@ class GridMap:
 
             else:
                 raise Exception("Unknown parameter type.")
-            
+
             params.append(param)
 
         return params
-            
+
     def card(self):
         return self.cardinality
 

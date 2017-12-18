@@ -62,6 +62,7 @@ class GPEIChooser:
         self.noise_scale = 0.1  # horseshoe prior
         self.amp2_scale  = 1    # zero-mean log normal prior
         self.max_ls      = 2    # top-hat prior on length scales
+        self.ls          =      None
 
     def __del__(self):
         self.locker.lock_wait(self.state_pkl)

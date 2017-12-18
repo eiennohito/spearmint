@@ -69,7 +69,7 @@ class RandomForestEIChooser:
             vals_pend = func_m + np.sqrt(func_v) + npr.randn(func_m.shape[0])
 
             # Re-fit using fantasies
-            self.rf.fit(np.vstack[comp,pend],np.hstack[vals,vals_pend])
+            self.rf.fit(np.vstack([comp,pend]),np.hstack([vals,vals_pend]))
 
             # Predict the marginal means and variances at candidates.
         func_m, func_v = self.rf.predict(cand)

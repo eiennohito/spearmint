@@ -30,6 +30,8 @@ import numpy.random   as npr
 import scipy.linalg   as spla
 import scipy.stats    as sps
 import scipy.optimize as spo
+import scipy.spatial.distance as spdist
+import scipy.misc as spmisc
 import cPickle
 import multiprocessing
 
@@ -67,7 +69,7 @@ class GPEIOptChooser:
         self.needs_burnin    = True
         self.pending_samples = int(pending_samples)
         self.D               = -1
-        self.hyper_iters     = 1        
+        self.hyper_iters     = 1
         # Number of points to optimize EI over
         self.grid_subset     = int(grid_subset)
         self.noiseless       = bool(int(noiseless))
@@ -76,6 +78,9 @@ class GPEIOptChooser:
         self.noise_scale = 0.1  # horseshoe prior
         self.amp2_scale  = 1    # zero-mean log normal prior
         self.max_ls      = 2    # top-hat prior on length scales
+        self.sample_points = 4
+        self.samples_per_point = 3
+        self.sample_from = 10
 
         # If multiprocessing fails or deadlocks, set this to False
         self.use_multiprocessing = bool(int(use_multiprocessing))
@@ -134,8 +139,8 @@ class GPEIOptChooser:
 
         try:
             output = (
-                '<br /><span class=\"label label-info\">Estimated mean:</span> ' + str(mean_mean) + 
-                '<br /><span class=\"label label-info\">Estimated noise:</span> ' + str(mean_noise) + 
+                '<br /><span class=\"label label-info\">Estimated mean:</span> ' + str(mean_mean) +
+                '<br /><span class=\"label label-info\">Estimated noise:</span> ' + str(mean_noise) +
                 '<br /><br /><span class=\"label label-info\">Inverse parameter sensitivity' +
                 ' - Gaussian Process length scales</span><br /><br />' +
                 '<div id=\"lschart\"></div><script type=\"text/javascript\">' +
@@ -211,11 +216,48 @@ class GPEIOptChooser:
         else:
             return self.amp2 * self.cov_func(self.ls, x1, x2)
 
+    def enhance_candidates(self, grid, complete, pending, all_values):
+        nitems = len(complete) + len(pending)
+        itemdim = grid.shape[1]
+
+        if nitems < self.sample_from:
+            return np.zeros(0, itemdim)
+
+        comp = grid[complete, :]
+        pend = grid[pending, :]
+        values = all_values[complete]
+        items = np.vstack([pend, comp])
+
+        result = []
+        sampled = []
+        sampled.extend(range(len(pending)))
+        min_val = np.min(values)
+        max_val = np.max(values)
+        scores = np.exp(5 * (min_val - values) / (max_val - min_val))
+        scores = np.pad(scores, [(len(pending), 0)], 'constant')
+        for i in xrange(self.sample_points):
+            if len(sampled) == 0:
+                weights = scores
+                item = np.argmax(weights)
+            else:
+                dists = spdist.cdist(items, items[sampled], 'sqeuclidean')
+                weights = np.exp(np.sum(np.log(dists), axis=1) / len(sampled))                
+                weights = weights * scores
+                weights = weights / np.sum(weights)
+                item = np.random.choice(nitems, p=weights)
+
+            #print(item, weights, weights[item], items[item])
+            sampled.append(item)
+            result.append(np.random.randn(self.samples_per_point, itemdim) * 1e-3 + items[item])
+
+        return np.vstack(result)
+
+
+
     # Given a set of completed 'experiments' in the unit hypercube with
     # corresponding objective 'values', pick from the next experiment to
     # run according to the acquisition function.
-    def next(self, grid, values, durations,
-             candidates, pending, complete):
+    def next(self, grid, values, durations, candidates, pending, complete):
 
         # Don't bother using fancy GP stuff at first.
         if complete.shape[0] < 2:
@@ -226,16 +268,16 @@ class GPEIOptChooser:
             self._real_init(grid.shape[1], values[complete])
 
         # Grab out the relevant sets.
-        comp = grid[complete,:]
-        cand = grid[candidates,:]
+        comp = grid[complete, :]
+        cand = grid[candidates, :]
         pend = grid[pending,:]
         vals = values[complete]
         numcand = cand.shape[0]
 
         # Spray a set of candidates around the min so far
         best_comp = np.argmin(vals)
-        cand2 = np.vstack((np.random.randn(10,comp.shape[1])*0.001 +
-                           comp[best_comp,:], cand))
+        print(grid.shape)
+        cand2 = np.vstack([self.enhance_candidates(grid, complete, pending, values), cand])
 
         if self.mcmc_iters > 0:
 
@@ -291,6 +333,7 @@ class GPEIOptChooser:
                 cand = np.vstack((cand, cand2))
 
             overall_ei = self.ei_over_hypers(comp,pend,cand,vals)
+            print(overall_ei, np.max(overall_ei, axis=0))
             best_cand = np.argmax(np.mean(overall_ei, axis=1))
 
             if (best_cand >= numcand):

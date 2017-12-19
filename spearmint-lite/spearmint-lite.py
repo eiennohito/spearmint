@@ -213,12 +213,9 @@ def main_controller(options, args):
         params = gmap.unit_to_list(candidate)
 
         # Now lets write this candidate to the file as pending
-        output = ""
-        for p in params:
-            output = output + str(p) + " "
-
+        output = " ".join(str(p) for p in params)
         output = "P P " + output + "\n"
-        outfile = open(res_file,"a")
+        outfile = open(res_file, "a")
         outfile.write(output)
         outfile.close()
 

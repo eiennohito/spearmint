@@ -171,7 +171,6 @@ class GPEIChooser:
                                 np.max(self.ls)))
 
             ei = self.compute_ei(comp, pend, cand, vals)
-
             best_cand = np.argmax(ei)
 
             return int(candidates[best_cand])
@@ -255,7 +254,7 @@ class GPEIChooser:
 
             # Predict the marginal means and variances at candidates.
             func_m = np.dot(cand_cross.T, alpha) + self.mean
-            func_v = self.amp2*(1+1e-6) - np.sum(beta**2, axis=0)
+            func_v = self.amp2*(1+1e-6) - np.sum(beta**2, axis=0)            
 
             # Expected improvement
             func_s = np.sqrt(func_v[:,np.newaxis])
@@ -360,4 +359,3 @@ class GPEIChooser:
         #self.dump_hypers()
 
         return
-
